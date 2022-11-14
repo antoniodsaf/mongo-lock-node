@@ -30,7 +30,7 @@ export default class RWMutex {
    * @param {string} clientID - id corresponding to the client using this lock instance. Must be unique
    * @param {Object} options - lock options
    */
-  constructor(coll, lockID, clientID, options = { sleepTime: 5000 }) {
+  constructor(coll, lockID, clientID, options = { sleepTime: 5000, maximumRetry: 3 }) {
     this._coll = coll;
     this._lockID = lockID;
     this._clientID = clientID;
@@ -53,6 +53,7 @@ export default class RWMutex {
     // Loop and do the following:
     // 1. attempt to acquire the lock (must have no readers and no writer)
     // 2. if not acquired, sleep and retry
+    let retry = 0;
     while (true) {
       try {
         const result = await this._coll.updateOne({
@@ -69,6 +70,11 @@ export default class RWMutex {
         }
       } catch (err) {
         throw new Error(`error aquiring lock ${this._lockID}: ${err.message}`);
+      }
+      
+      if (++retry == this._options.maximumRetry) {
+        console.info(`maximum retry reached, skipped`);
+        return;
       }
 
       await timeoutPromise(this._options.sleepTime);
